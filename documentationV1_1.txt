@@ -1,0 +1,66 @@
+Customer Churn Prediction Model: Analysis & Report
+
+1. Project Objective
+The primary goal of this project is to develop a machine learning model that accurately predicts whether a bank customer will churn (Exited = 1) or not. This is a binary classification task.
+The key business objective is to proactively identify customers at risk of leaving so that the bank can implement targeted retention strategies. Therefore, the model's performance will be primarily evaluated on its Recall (Sensitivity) for the churn class, aiming to minimize the number of missed churners (False Negatives).
+2. Initial Data Brainstorming & Hypothesis Generation
+Before building any models, an initial analysis of the dataset's features was conducted to form hypotheses about the potential drivers of churn.
+Key Feature Hypotheses:
+Customer Engagement & Satisfaction:
+IsActiveMember: Strongly predictive. Inactive members are likely "pre-churned" and have a high probability of leaving.
+Complain, Satisfaction Score: Initially considered strong predictors. A customer complaint is a direct signal of dissatisfaction. However, these were later identified as a source of data leakage (see Section 4.1) as they likely occur at or after the decision to churn has been made.
+Banking Relationship & Stickiness:
+NumOfProducts: Highly predictive, likely non-linear. Customers with only 1 product have low stickiness. Customers with 2 products are likely stable. Customers with 3 or 4 products may have a higher churn rate again due to complexity or dissatisfaction.
+Balance: Predictive. Customers with a zero or very low balance are less invested in the bank and more likely to churn.
+Tenure & Age: Predictive. Generally, older and longer-tenured customers are expected to be more loyal. However, very young customers or very new customers might be high-risk groups.
+Demographics & Financials:
+Geography: Potentially predictive. Market conditions, local competition, or service quality could lead to higher churn rates in specific countries (e.g., Germany).
+CreditScore: Predictive, especially at the extremes. Very low credit scores might correlate with frustration from denied services, while very high scores likely indicate stable customers.
+Card Type & Point Earned: Could serve as secondary engagement metrics. Point Earned was later flagged as a potential source of data leakage.
+Proposed Feature Engineering Ideas:
+TenureToAgeRatio: To capture the "life-long customer" persona.
+BalanceToSalaryRatio: To measure financial health.
+IsTransactionalCustomer: A flag for customers using the bank primarily for credit card services (zero balance, has credit card).
+CreditScoreTier: Binning the CreditScore to help the model capture trends more easily.
+3. Model V1: Initial Build & Leakage Discovery
+The first model was built using an XGBoost classifier within a comprehensive pipeline that included hyperparameter tuning (GridSearchCV) and extensive overfitting analysis. The model was optimized for Recall.
+Results: The model achieved near-perfect scores: 99.8% cross-validation recall and 99.5% recall on the final test set.
+Diagnosis: These "too good to be true" results, combined with the feature importance analysis, pointed to a critical issue: data leakage.
+Root Cause: The feature Complain had an importance of over 66%, with related features (Satisfaction Score, ComplaintResolved) contributing another ~23%. The model had learned a simple, unrealistic rule: IF Complain == 1 THEN Exited = 1. This rule is not predictive for identifying future churners before they complain.
+4. Model V1.1: The Realistic Baseline
+To address the data leakage, a revised baseline model (V1.1) was created.
+Actions Taken:
+Removed Leaky Columns: The columns Complain, Satisfaction Score, and Point Earned were completely removed from the dataset before any processing.
+Re-ran the Model: The exact same XGBoost pipeline, optimized for Recall, was run on the cleaned dataset.
+V1.1 Performance Summary:
+Best Cross-Validation Recall: 79.14%
+Final Test Set Recall: 80.88%
+Final Test Set Precision (for Churners): 47%
+Final Test Set Accuracy: 77.60%
+Overfitting Analysis:
+The model showed excellent generalization. The difference between training recall (82.3%) and cross-validation recall (79.1%) was minimal.
+Learning curves demonstrated healthy convergence, and the validation curve confirmed that the optimal max_depth was found, preventing significant overfitting.
+Top 5 Predictive Features (V1.1):
+NumOfProducts (19.0%)
+Age (17.7%)
+IsActiveMember (12.0%)
+Geography_Germany (8.8%)
+Gender_Male (6.1%)
+This model serves as our official, trustworthy baseline. It successfully identifies ~81 out of every 100 churners.
+5. Future Work: Roadmap for V2 and V3
+The V1.1 model is a solid start, but there is clear room for improvement, primarily by addressing the class imbalance more effectively.
+Model V2: Advanced Imbalance Handling
+Objective: Improve Recall and Precision by providing the model with a better-quality, balanced dataset for training.
+Proposed Technique: Implement a hybrid resampling strategy using SMOTEENN (imbalanced-learn library).
+SMOTE (Synthetic Minority Over-sampling Technique): Will create new, synthetic examples of the minority (churn) class.
+ENN (Edited Nearest Neighbours): Will then act as a cleaning step, removing any noisy samples (both original and synthetic) that lie near the class boundary.
+Implementation: This will be done within an ImbPipeline to ensure resampling is applied correctly within each fold of the cross-validation, preventing data leakage. The scale_pos_weight parameter will be removed from the XGBoost model as its function will be replaced by SMOTEENN.
+Expected Outcome: A potential increase in both Recall and Precision on the final test set.
+Model V3: Deeper Feature Engineering & Alternative Models
+Objective: Squeeze additional performance from the model by exploring more complex feature interactions and testing alternative algorithms.
+Proposed Feature Engineering:
+Interaction Terms: Explicitly create interaction features based on the top predictors from V1.1 (e.g., Age * NumOfProducts, Balance * IsActiveMember).
+Polynomial Features: Explore if non-linear transformations of key features like Age and Balance can provide more signal.
+Alternative Models:
+Test other powerful classifiers like LightGBM (often faster than XGBoost) or a TabNet deep learning model to see if a different architecture can better capture the patterns in the data.
+Ensembling: Combine the predictions of the best models (e.g., XGBoost and LightGBM) using stacking or voting to create a more robust final model.
